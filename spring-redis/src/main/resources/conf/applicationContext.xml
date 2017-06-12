@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context" xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+       xmlns:jee="http://www.springframework.org/schema/jee" xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:util="http://www.springframework.org/schema/util" xmlns:task="http://www.springframework.org/schema/task"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:cache="http://www.springframework.org/schema/cache"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc-4.0.xsd
+		http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-4.0.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.0.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-4.0.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-4.0.xsd
+        http://www.springframework.org/schema/mvc  http://www.springframework.org/schema/mvc/spring-mvc-4.0.xsd
+        http://www.springframework.org/schema/cache  http://www.springframework.org/schema/cache/spring-cache-4.0.xsd"
+        default-lazy-init="true">
+
+    <!-- 启用扫描注解-->
+    <context:component-scan base-package="org.redis.mj"/>
+    <!-- 启用注册注解-->
+    <context:annotation-config />
+
+    <!-- 使用默认注解驱动-->
+    <mvc:annotation-driven>
+        <mvc:message-converters>
+            <!-- 使用jackson转换器，将map转成json-->
+            <bean class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter">
+                <!-- 设置支持的类型-->
+                <property name="supportedMediaTypes">
+                    <list>
+                        <value>application/json;charset=UTF-8</value>
+                    </list>
+                </property>
+            </bean>
+        </mvc:message-converters>
+
+    </mvc:annotation-driven>
+<cache:annotation-driven/>
+
+
+
+
+    <!--加载jdbc配置文件-->
+    <context:property-placeholder location="classpath*:/conf/jdbc.properties" ignore-unresolvable="true"></context:property-placeholder>
+
+    <!-- mybatis 配置 -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <property name="dataSource" ref="datasoruce" />
+        <property name="typeAliasesPackage" value="org.redis.mj.entity"/>
+        <property name="mapperLocations" value="classpath:/mappings/*.xml" />
+        <property name="configLocation" value="classpath:/conf/mybatis-config.xml" />
+    </bean>
+
+    <bean id="scanner" class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory" />
+        <property name="basePackage" value="org.redis.mj.dao" />
+    </bean>
+
+    <!--配置事务 -->
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="datasoruce" />
+    </bean>
+
+    <!--使用注解方式配置事务,即声明式事务-->
+    <tx:annotation-driven transaction-manager="transactionManager"></tx:annotation-driven>
+
+    <!-- datasource -->
+    <bean id="datasoruce" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <property name="driverClassName" value="${jdbc.driver}"/>
+        <property name="url"      value="${jdbc.url}"/>
+        <property name="username" value="${jdbc.username}"/>
+        <property name="password" value="${jdbc.password}"/>
+
+        <!-- 配置初始化值-->
+        <property name="initialSize" value="${jdbc.pool.init}"/>
+        <property name="maxActive" value="${jdbc.pool.maxActive}"/>
+        <property name="minIdle" value="${jdbc.pool.minIdle}"/>
+
+        <!-- 配置最大连接等待时间-->
+        <property name="maxWait" value="60000"/>
+        <!-- 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒 -->
+        <property name="timeBetweenEvictionRunsMillis" value="60000" />
+
+        <!-- 配置一个连接在池中最小生存的时间，单位是毫秒 -->
+        <property name="minEvictableIdleTimeMillis" value="300000" />
+
+        <property name="validationQuery" value="${jdbc.testSql}" />
+        <property name="testWhileIdle" value="true" />
+        <property name="testOnBorrow" value="false" />
+        <property name="testOnReturn" value="false" />
+
+        <!-- 配置监控统计拦截的filters -->
+        <property name="filters" value="stat" />
+    </bean>
+
+
+    <!-- 配置视图解析器-->
+    <bean id="view" class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+        <property name="prefix"  value="/WEB-INF/views/jsp/"></property>
+        <property name="suffix"  value=".jsp"></property>
+    </bean>
+
+    <context:property-placeholder location="classpath:/conf/redis.properties" ignore-unresolvable="true" />
+
+<bean id="poolconfig" class="redis.clients.jedis.JedisPoolConfig">
+    <property name="maxTotal" value="${redis.maxTotal}" />
+    <property name="maxIdle"   value="${redis.maxIdle}" />
+    <property name="maxWaitMillis" value="${redis.maxWait}"/>
+    <property name="testOnBorrow"  value="${redis.testOnBorrow}"/>
+
+</bean>
+
+    <!-- jedis factory -->
+    <bean id="jedisconnectionfactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">
+        <property name="hostName" value="${redis.host}" />
+        <property name="port" value="${redis.port}" />
+        <property name="poolConfig" ref="poolconfig"/>
+        <property name="timeout" value="${redis.timeout}"/>
+    </bean>
+
+    <bean id="redisTemplate" class="org.springframework.data.redis.core.RedisTemplate">
+        <property name="connectionFactory" ref="jedisconnectionfactory" />
+
+
+    </bean>
+
+    <bean id="cacheManager" class="org.springframework.data.redis.cache.RedisCacheManager">
+        <constructor-arg  ref="redisTemplate">
+
+        </constructor-arg>
+
+    </bean>
+</beans>
